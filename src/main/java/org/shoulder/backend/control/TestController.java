@@ -9,6 +9,16 @@ import java.util.List;
 @RestController
 public class TestController {
 
+    @GetMapping("/")
+    public String home() {
+        return "home";
+    }
+
+    @GetMapping("/api/user/info")
+    public String user() {
+        return "user";
+    }
+
     @GetMapping("/api/auth/test")
     public List<String> getTest() {
         List<String> items = new ArrayList<>();

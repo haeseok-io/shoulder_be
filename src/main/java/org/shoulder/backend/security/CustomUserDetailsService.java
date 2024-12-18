@@ -18,7 +18,7 @@ public class CustomUserDetailsService implements UserDetailsService {
         Member member = memberRepository.findByEmail(username);
 
         if( member==null ) {
-            throw new UsernameNotFoundException("아이디 정보가 존재하지 않습니다.");
+            throw new UsernameNotFoundException("아이디가 존재하지 않습니다.");
         }
 
         return new CustomUserDetails(member);

@@ -33,15 +33,15 @@ public class AuthServiceImple implements AuthService {
 
     @Override
     public void checkEmailExists(String email) { // 이메일 존재여부 체크
-        if( memberRepository.findByEmail(email)==null ) {
-            throw new CustomException("EMAIL_NOT_FOUND", "존재하지 않는 이메일 입니다.");
+        if( !memberRepository.existsByEmail(email) ) {
+            throw new CustomException("EMAIL_NOT_FOUND", "email", "존재하지 않는 이메일 입니다.");
         }
     }
 
     @Override
     public void checkEmailDuplicate(String email) { // 이메일 중복여부 체크
-        if( memberRepository.findByEmail(email)!=null ) {
-            throw new CustomException("EMAIL_DUPLICATE", "현재 사용중인 이메일 입니다.");
+        if( memberRepository.existsByEmail(email) ) {
+            throw new CustomException("EMAIL_DUPLICATE", "email", "현재 사용중인 이메일 입니다.");
         }
     }
 }

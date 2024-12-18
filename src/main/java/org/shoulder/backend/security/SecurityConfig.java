@@ -1,22 +1,38 @@
 package org.shoulder.backend.security;
 
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.shoulder.backend.jwt.JWTFilter;
+import org.shoulder.backend.jwt.JWTUtil;
+import org.shoulder.backend.jwt.LoginFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
 
-@Slf4j
+import java.util.Collections;
+
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
-    private final CustomUserDetailsService customUserDetailsService;
+    private final AuthenticationConfiguration authenticationConfiguration;
+    private final JWTUtil jwtUtil;
+    private final JWTFilter jwtFilter;
+
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
+        return configuration.getAuthenticationManager();
+    }
 
     @Bean
     public BCryptPasswordEncoder bCryptPasswordEncoder() {
@@ -24,28 +40,59 @@ public class SecurityConfig {
     }
 
     @Bean
-    public DaoAuthenticationProvider daoAuthenticationProvider() {
-        DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
-
-        provider.setHideUserNotFoundExceptions(false);
-        provider.setUserDetailsService(customUserDetailsService);
-        provider.setPasswordEncoder(bCryptPasswordEncoder());
-
-        return provider;
-    }
-
-    @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        log.info("##### 시큐리티 적용 #####");
 
+        // cors 설정
         http
-                .csrf(AbstractHttpConfigurer::disable)
-                .authenticationProvider(daoAuthenticationProvider())
+                .cors(cors -> cors
+                        .configurationSource(new CorsConfigurationSource() {
+                            @Override
+                            public CorsConfiguration getCorsConfiguration(HttpServletRequest request) {
+                                CorsConfiguration corsConfiguration = new CorsConfiguration();
+
+                                corsConfiguration.setAllowedOrigins(Collections.singletonList("http://localhost:3000"));
+                                corsConfiguration.setAllowedMethods(Collections.singletonList("*")); // 모든 요청 허용 (GET, POST 등등)
+                                corsConfiguration.setAllowCredentials(true);
+                                corsConfiguration.setMaxAge(3600L);
+
+                                corsConfiguration.setAllowedHeaders(Collections.singletonList("*"));
+                                corsConfiguration.setAllowedHeaders(Collections.singletonList("Authorization"));
+
+                                return corsConfiguration;
+                            }
+                        }));
+
+        // csrf disable
+        http.csrf(AbstractHttpConfigurer::disable);
+        // form 로그인 방식 disable
+        http.formLogin(AbstractHttpConfigurer::disable);
+        // http basic 인증 방식 disable
+        http.httpBasic(AbstractHttpConfigurer::disable);
+
+        // 인가 작업
+        http
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
-                        //.requestMatchers("/api/user/**").hasAnyRole("USER") // User 룰 가진 유저만 접근 가능
-                        .anyRequest().authenticated()
-                );
+                        .requestMatchers("/api/user/**").hasAuthority("USER")
+                        .anyRequest().authenticated());
+
+        // 필터 추가
+        // addFilterAt : 해당필터 자리에 대체 등록
+        // addFilterBefore : 해당 필터 전에 등록
+        // addFilterAfter: 해당 필터 후에 등록
+
+        // LoginFilter 앞에 JWTFilter 등록
+        http.addFilterBefore(jwtFilter, LoginFilter.class);
+
+        // LoginFilter 를 UsernamePasswordAuthenticationFilter 자리에 대체하여 등록
+        http.addFilterAt(new LoginFilter(authenticationManager(authenticationConfiguration), jwtUtil), UsernamePasswordAuthenticationFilter.class);
+
+
+        // 세션 설정
+        http
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
 
         return http.build();
